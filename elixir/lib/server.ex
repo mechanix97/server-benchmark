@@ -14,16 +14,16 @@ defmodule JsonRpcServer do
       reuseaddr: true,
       nodelay: true
     ])
-    Logger.info("Server started on port 8080")
+    Logger.info("JSON-RPC server started on port 8080")
     {:ok, _} = Task.Supervisor.start_link(name: JsonRpcServer.TaskSupervisor)
     send(self(), :accept)
-    {:ok, %{socket: socket, clients: %{}}}
+    {:ok, %{socket: socket}}
   end
 
   def handle_info(:accept, state = %{socket: socket}) do
     case :gen_tcp.accept(socket) do
       {:ok, client} ->
-        Logger.debug("Accepted client connection: #{inspect(client)}")
+        Logger.debug("Accepted client: #{inspect(client)}")
         send(self(), :accept)
         {:noreply, state}
       {:error, reason} ->
@@ -40,11 +40,11 @@ defmodule JsonRpcServer do
     {:noreply, state}
   end
 
-  def handle_info({:http, client, {:http_header, _, _, _, _}}, state) do
+  def handle_info({:http, _client, {:http_header, _, _, _, _}}, state) do
     {:noreply, state}
   end
 
-  def handle_info({:http, client, :http_eoh}, state) do
+  def handle_info({:http, _client, :http_eoh}, state) do
     {:noreply, state}
   end
 
@@ -107,7 +107,6 @@ defmodule JsonRpcServer do
   end
 
   defp process_method(client, "eth_chainId", _params, id) do
-    # Hardcoded chain ID for demonstration (e.g., Ethereum mainnet = 1)
     send_jsonrpc_response(client, id, "0x1")
   end
 
@@ -123,7 +122,7 @@ defmodule JsonRpcServer do
     }
     send_response(client, 200, response)
   end
-{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}
+
   defp send_jsonrpc_error(client, id, code, message) do
     response = %{
       "jsonrpc" => "2.0",
