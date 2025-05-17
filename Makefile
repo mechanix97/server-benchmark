@@ -6,7 +6,7 @@ run-rust:
 
 run-elixir:
 	@echo "Running Elixir server..."
-	@cd elixir && elixir server.ex
+	@cd elixir/lib && elixir server.ex
 
 run-go:
 	@echo "Running Go server..."
