@@ -16,7 +16,7 @@ defmodule JsonRpcServer do
   defp serve(client) do
     case read_request(client, []) do
       {:ok, body} ->
-        case :json.decode(body) do
+        case Jason.decode(body) do
           {:ok, _json} ->
             :gen_tcp.send(client, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"success\"}\r\n")
           {:error, _} ->
