@@ -17,16 +17,13 @@ defmodule JsonRpcServer do
     Logger.info("Server started on port 8080")
     {:ok, _} = Task.Supervisor.start_link(name: JsonRpcServer.TaskSupervisor)
     send(self(), :accept)
-    {:ok, %{socket: socket}}
+    {:ok, %{socket: socket, clients: %{}}}
   end
 
   def handle_info(:accept, state = %{socket: socket}) do
     case :gen_tcp.accept(socket) do
       {:ok, client} ->
-        {:ok, _pid} = Task.Supervisor.start_child(
-          JsonRpcServer.TaskSupervisor,
-          fn -> serve(client) end
-        )
+        Logger.debug("Accepted client connection: #{inspect(client)}")
         send(self(), :accept)
         {:noreply, state}
       {:error, reason} ->
@@ -35,45 +32,108 @@ defmodule JsonRpcServer do
     end
   end
 
-  def handle_info({:tcp, client, packet}, state) do
-    # Handle TCP messages if needed for active mode
+  def handle_info({:http, client, {:http_request, :POST, _, _}}, state) do
+    {:ok, _pid} = Task.Supervisor.start_child(
+      JsonRpcServer.TaskSupervisor,
+      fn -> serve(client) end
+    )
     {:noreply, state}
   end
 
-  def handle_info({:tcp_closed, _client}, state) do
+  def handle_info({:http, client, {:http_header, _, _, _, _}}, state) do
+    {:noreply, state}
+  end
+
+  def handle_info({:http, client, :http_eoh}, state) do
+    {:noreply, state}
+  end
+
+  def handle_info({:http, client, {:http_error, _}}, state) do
+    Logger.warn("HTTP error on client: #{inspect(client)}")
+    :gen_tcp.close(client)
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp_closed, client}, state) do
+    Logger.debug("Client closed: #{inspect(client)}")
+    :gen_tcp.close(client)
+    {:noreply, state}
+  end
+
+  def handle_info(msg, state) do
+    Logger.warn("Unhandled message: #{inspect(msg)}")
     {:noreply, state}
   end
 
   defp serve(client) do
     case read_request(client, []) do
       {:ok, body} ->
-        case Jason.decode(body) do
-          {:ok, _json} ->
-            send_response(client, 200, %{"status" => "success"})
-          {:error, _} ->
-            send_response(client, 400, %{"status" => "error"})
-        end
+        handle_jsonrpc_request(client, body)
       _ ->
-        send_response(client, 400, %{"status" => "error"})
+        send_jsonrpc_error(client, nil, -32700, "Parse error")
     end
     :gen_tcp.close(client)
   end
 
   defp read_request(client, acc) do
     receive do
-      {:tcp, ^client, :http_eoh} ->
+      {:http, ^client, :http_eoh} ->
         {:ok, Enum.join(acc, "")}
-      {:tcp, ^client, {:http_request, :POST, _, _}} ->
+      {:http, ^client, {:http_request, :POST, _, _}} ->
         read_request(client, acc)
-      {:tcp, ^client, {:http_header, _, _, _, _}} ->
+      {:http, ^client, {:http_header, _, _, _, _}} ->
         read_request(client, acc)
-      {:tcp, ^client, data} ->
+      {:http, ^client, data} when is_binary(data) ->
         read_request(client, [data | acc])
+      {:http, ^client, {:http_error, _}} ->
+        :error
       {:tcp_closed, ^client} ->
         :error
     after
       5_000 -> :error
     end
+  end
+
+  defp handle_jsonrpc_request(client, body) do
+    case Jason.decode(body) do
+      {:ok, %{"jsonrpc" => "2.0", "method" => method, "id" => id} = request} ->
+        params = Map.get(request, "params", [])
+        process_method(client, method, params, id)
+      {:ok, _} ->
+        send_jsonrpc_error(client, nil, -32600, "Invalid Request")
+      {:error, _} ->
+        send_jsonrpc_error(client, nil, -32700, "Parse error")
+    end
+  end
+
+  defp process_method(client, "eth_chainId", _params, id) do
+    # Hardcoded chain ID for demonstration (e.g., Ethereum mainnet = 1)
+    send_jsonrpc_response(client, id, "0x1")
+  end
+
+  defp process_method(client, _method, _params, id) do
+    send_jsonrpc_error(client, id, -32601, "Method not found")
+  end
+
+  defp send_jsonrpc_response(client, id, result) do
+    response = %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => result
+    }
+    send_response(client, 200, response)
+  end
+{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}
+  defp send_jsonrpc_error(client, id, code, message) do
+    response = %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "error" => %{
+        "code" => code,
+        "message" => message
+      }
+    }
+    send_response(client, 200, response)
   end
 
   defp send_response(client, status_code, body) do
