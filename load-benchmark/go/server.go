@@ -30,7 +30,7 @@ func sieveOfEratosthenes(n int) []int {
 }
 
 func main() {
-	n := 1_000_000
+	n := 100_000_000
 	start := time.Now()
 	primes := sieveOfEratosthenes(n)
 	duration := time.Since(start)

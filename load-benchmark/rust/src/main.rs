@@ -21,7 +21,7 @@ fn sieve_of_eratosthenes(n: usize) -> Vec<usize> {
 }
 
 fn main() {
-    let n = 1_000_000;
+    let n = 100_000_000;
     let start = std::time::Instant::now();
     let primes = sieve_of_eratosthenes(n);
     let duration = start.elapsed();
