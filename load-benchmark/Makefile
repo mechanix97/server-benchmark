@@ -2,7 +2,7 @@
 
 run-rust:
 	@echo "Running Rust server..."
-	@cd rust && cargo run
+	@cd rust && cargo run --release
 
 run-elixir:
 	@echo "Running Elixir server..."
