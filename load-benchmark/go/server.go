@@ -1,42 +1,38 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"math"
+	"time"
 )
 
-type JsonRpcRequest struct {
-	Jsonrpc string   `json:"jsonrpc"`
-	Method  string   `json:"method"`
-	Params  []string `json:"params"`
-	Id      int      `json:"id"`
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, `{"status":"error"}`, http.StatusBadRequest)
-		return
+func sieveOfEratosthenes(n int) []int {
+	isPrime := make([]bool, n+1)
+	for i := 2; i <= n; i++ {
+		isPrime[i] = true
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, `{"status":"error"}`, http.StatusBadRequest)
-		return
+	for i := 2; i <= int(math.Sqrt(float64(n))); i++ {
+		if isPrime[i] {
+			for j := i * i; j <= n; j += i {
+				isPrime[j] = false
+			}
+		}
 	}
 
-	var req JsonRpcRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, `{"status":"error"}`, http.StatusBadRequest)
-		return
+	var primes []int
+	for i := 2; i <= n; i++ {
+		if isPrime[i] {
+			primes = append(primes, i)
+		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, `{"status":"success"}`)
+	return primes
 }
 
 func main() {
-	http.HandleFunc("/", handler)
-	http.ListenAndServe(":8080", nil)
+	n := 1_000_000
+	start := time.Now()
+	primes := sieveOfEratosthenes(n)
+	duration := time.Since(start)
+	fmt.Printf("Found %d primes up to %d in %v\n", len(primes), n, duration)
 }
