@@ -6,3 +6,9 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1.40", features = ["full"] }
 serde_json = "1.0"
+
+[profile.release]
+opt-level = 3        # Máximo nivel de optimización (ya es el predeterminado en --release)
+lto = "fat"          # Habilitar Link-Time Optimization (LTO) para optimizaciones globales
+codegen-units = 1    # Reducir el número de unidades de codegen para maximizar optimizaciones
+strip = true
